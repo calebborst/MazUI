@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBD-II Dashboard</title>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #333; margin: 0; }
+        canvas { background-color: #000; border-radius: 20px; box-shadow: 0 0 20px rgba(255,255,255,0.5); }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="1268" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const maxValues = { Speed: 240, RPM: 8000, Coolant: 120 };
+        let currentValues = { Speed: 0, RPM: 0, Coolant: 0 };
+        let targetValues = { Speed: 0, RPM: 0, Coolant: 0 };
+
+        const positions = [
+            { centerX: 200, centerY: 200, label: 'Speed', unit: 'km/h' },
+            { centerX: 634, centerY: 200, label: 'RPM', unit: '' },
+            { centerX: 1068, centerY: 200, label: 'Coolant', unit: '°C' }
+        ];
+
+        const startAngle = 0.75 * Math.PI; // Adjusted startAngle
+        const endAngle = 2.25 * Math.PI;  // Adjusted endAngle
+        const arcRange = endAngle - startAngle;
+
+        function mapValueToAngle(value, maxVal) {
+            // Correct mapping: 0 => startAngle, maxVal => endAngle
+            return startAngle + ((value / maxVal) * arcRange);
+        }
+
+        function drawNeedle(centerX, centerY, rotation, color) {
+            ctx.lineWidth = 4;
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(rotation+1.5);
+            ctx.beginPath();
+            ctx.moveTo(0, 10);
+            ctx.lineTo(0, -90);
+            ctx.strokeStyle = color;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawDial(centerX, centerY, label, unit, currentValue) {
+            // Clear the previous frame
+            ctx.clearRect(centerX - 150, centerY - 150, 300, 300);
+
+            // Draw the arc
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 140, startAngle, endAngle);
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = '#444';
+            ctx.stroke();
+
+            // Draw ticks and numbers
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            for (let i = 0; i <= 10; i++) {
+                const angle = startAngle + (i / 10) * arcRange;
+                const value = Math.round((i * maxValues[label] / 10));
+                const x = centerX + 120 * Math.cos(angle) - ctx.measureText(value).width / 2;
+                const y = centerY + 120 * Math.sin(angle) + 5;
+                ctx.fillText(value, x, y);
+
+                // Draw minor ticks
+                if (i < 10) {
+                    for (let j = 1; j < 5; j++) {
+                        const minorAngle = angle + (j / 50) * arcRange;
+                        const dotX = centerX + 130 * Math.cos(minorAngle);
+                        const dotY = centerY + 130 * Math.sin(minorAngle);
+                        ctx.beginPath();
+                        ctx.arc(dotX, dotY, 2, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#888';
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // Add dial name and current value
+            ctx.font = '16px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText(label, centerX - ctx.measureText(label).width / 2, centerY + 80);
+            ctx.font = '20px Arial';
+            ctx.fillText(currentValue + ' ' + unit, centerX - ctx.measureText(currentValue + ' ' + unit).width / 2, centerY + 100);
+        }
+
+        function updateGauge(centerX, centerY, label, unit) {
+            const currentValue = currentValues[label];
+            const targetValue = targetValues[label];
+            const maxVal = maxValues[label];
+
+            const currentRotation = mapValueToAngle(currentValue, maxVal);
+            const targetRotation = mapValueToAngle(targetValue, maxVal);
+
+            const diff = targetValue - currentValue;
+            const step = diff / 100; // Smooth transition with 100 steps
+
+            if (Math.abs(diff) > 0.5) {
+                currentValues[label] += step;
+            } else {
+                currentValues[label] = targetValue;
+            }
+
+            drawDial(centerX, centerY, label, unit, Math.round(currentValues[label]));
+            drawNeedle(centerX, centerY, currentRotation, 'red');
+        }
+
+        function animate() {
+            positions.forEach(pos => {
+                updateGauge(pos.centerX, pos.centerY, pos.label, pos.unit);
+            });
+            requestAnimationFrame(animate);
+        }
+
+        function fetchData() {
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    positions.forEach(pos => {
+                        targetValues[pos.label] = data[pos.label];
+                    });
+                });
+        }
+
+        setInterval(fetchData, 1000);
+        animate(); // Start animation loop
+    </script>
+</body>
+</html>

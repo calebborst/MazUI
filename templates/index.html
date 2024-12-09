@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBD-II Dashboard</title>
+    <style>
+        body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #1c1c1c, #2a2a2a);
+        color: white;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+        }
+        .sidebar {
+        width: 200px;
+        height: 100vh;
+        background-color: #2b2b2b;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 0;
+        transition: width 0.3s;
+        overflow: hidden;
+        position: fixed;
+        left: 0;
+        top: 0;
+        }
+        .sidebar.shrink {
+        width: 60px;
+        }
+        .sidebar a {
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+        color: #e0e0e0;
+        padding: 10px;
+        width: 100%;
+        box-sizing: border-box;
+        transition: background-color 0.3s, padding 0.3s;
+        position: relative;
+        }
+        .sidebar a span {
+        margin-left: 10px;
+        white-space: nowrap;
+        transition: opacity 0.3s;
+        }
+        .sidebar.shrink a span {
+        opacity: 0;
+        }
+        .sidebar a::before {
+        content: attr(data-short);
+        display: none;
+        position: absolute;
+        left: 15px;
+        font-weight: bold;
+        }
+        .sidebar.shrink a::before {
+        display: inline-block;
+        color: #aaa;
+        }
+        .sidebar.shrink a span {
+        visibility: hidden;
+        }
+        .sidebar a:hover {
+        background-color: #3c3c3c;
+        }
+        .sidebar a.active {
+        background-color: #4a4a4a;
+        font-weight: bold;
+        border-left: 4px solid #6fa8dc;
+        }
+        .toggle-button {
+        background-color: #444;
+        color: white;
+        border: none;
+        width: 100%;
+        padding: 10px;
+        cursor: pointer;
+        font-size: 16px;
+        }
+        .top-icons {
+        position: fixed;
+        top: 10px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        font-size: 14px;
+        color: #d0d0d0;
+        }
+        .container {
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding: 20px;
+        box-sizing: border-box;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
+        margin-left: 200px;
+        overflow-y: auto;
+        height: 100vh;
+        }
+        .tab-content {
+        opacity: 0;
+        display: none;
+        transition: opacity 0.5s ease-in-out;
+        width: 100%;
+        }
+        .tab-content.active {
+        display: block;
+        opacity: 1;
+        padding: 20px;
+        box-sizing: border-box;
+        }
+        canvas {
+        display: block;
+        margin: 0 auto;
+        border-radius: 20px;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+        #music {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 20px;
+        text-align: center;
+        color: #e0e0e0;
+        }
+        #file-explorer {
+        width: 100%;
+        padding: 10px;
+        overflow-y: auto;
+        max-height: 400px;
+        max-width: 100%;
+        scrollbar-width: thin;
+        scrollbar-color: #6fa8dc #1c1c1c;
+        border: 2px solid #6fa8dc;
+        border-radius: 10px;
+        background: transparent;
+        box-sizing: border-box;
+        text-align: left;
+        }
+        #file-explorer::-webkit-scrollbar {
+        width: 8px;
+        }
+        #file-explorer::-webkit-scrollbar-track {
+        background: #1c1c1c;
+        }
+        #file-explorer::-webkit-scrollbar-thumb {
+        background-color: #6fa8dc;
+        border-radius: 4px;
+        }
+        #music-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        }
+        #music-list li {
+        padding: 10px;
+        margin: 5px 10px;
+        color: #e0e0e0;
+        cursor: pointer;
+        transition: background 0.3s, box-shadow 0.3s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        }
+        #music-list li:hover {
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        border-color: #6fa8dc;
+        }
+        #music-list li.active {
+        background: #6fa8dc;
+        color: black;
+        font-weight: bold;
+        }
+        #player {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 2px solid #6fa8dc;
+        background: transparent;
+        text-align: center;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+        box-sizing: border-box;
+        }
+        #song-title {
+        font-size: 1.5rem;
+        margin: 0 0 10px;
+        color: #ffffff;
+        text-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+        }
+        #song-details {
+        font-size: 1rem;
+        margin: 0 0 20px;
+        color: #aaaaaa;
+        }
+        audio {
+        width: 100%;
+        outline: none;
+        border: none;
+        border-radius: 5px;
+        background: #3a3a3a;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.6);
+        }
+        audio::-webkit-media-controls-panel {
+        background-color: #2a2a2a;
+        color: #ffffff;
+        }
+        audio::-webkit-media-controls-play-button,
+        audio::-webkit-media-controls-timeline,
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display {
+        color: #ffffff;
+        }
+        audio::-webkit-media-controls-volume-slider {
+        background: #444;
+        border-radius: 5px;
+        }
+        audio::-webkit-media-controls-volume-slider-thumb {
+        background: #6fa8dc;
+        border-radius: 50%;
+        }
+        #folder-list, .song-list {
+        text-align: left;
+        margin: 0;
+        padding: 0;
+        }
+        #file-explorer {
+        text-align: left;
+        }
+        .folder-name {
+        cursor: pointer;
+        font-weight: bold;
+        padding: 5px;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        }
+        .folder-name:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        }
+        .folder-name .arrow {
+        transform: rotate(0deg);
+        transition: transform 0.3s ease;
+        }
+        .folder-name.open .arrow {
+        transform: rotate(90deg);
+        }
+        .song-item {
+        padding: 5px;
+        cursor: pointer;
+        border-radius: 3px;
+        transition: background-color 0.3s ease;
+        }
+        .song-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        }
+        .folder-item .song-list.open {
+        max-height: 100%;
+        }
+        #folder-list {
+        margin: 0;
+        padding: 0;
+        }
+        .folder-item {
+        margin-bottom: 10px;
+        }
+        .folder-item .song-list {
+        padding-left: 20px;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.3s ease-in-out;
+        }
+        .folder-item.root .song-list {
+        max-height: none;
+        padding-left: 0;
+        }
+        .folder-item.root .folder-name {
+        cursor: default;
+        }
+        .folder-item.root .folder-name .arrow {
+        display: none;
+        }
+        .song-list {
+        list-style: none;
+        padding-left: 20px;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.3s ease-in-out;
+        }
+        .song-list.open {
+        max-height: 500px;
+        }
+        #settings {
+        max-width: 900px;
+        margin: 20px auto;
+        background: #1e1e1e;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        color: #ffffff;
+        font-size: 14px;
+        }
+        #settings h1 {
+        font-size: 28px;
+        color: #6fa8dc;
+        border-bottom: 2px solid #6fa8dc;
+        padding-bottom: 5px;
+        margin-bottom: 20px;
+        }
+        #settings label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        }
+        #settings input[type="color"],
+        #settings select,
+        #settings input[type="range"] {
+        width: 100%;
+        max-width: 300px;
+        margin-bottom: 15px;
+        padding: 5px;
+        border: none;
+        border-radius: 5px;
+        background: #2b2b2b;
+        color: #ffffff;
+        outline: none;
+        }
+        #settings input[type="checkbox"] {
+        margin-right: 5px;
+        }
+        #settings hr {
+        border: none;
+        border-top: 1px solid #3a3a3a;
+        margin: 20px 0;
+        }
+        #settings div {
+        margin-bottom: 15px;
+        }
+        #settings input[type="range"]::-webkit-slider-thumb {
+        background: #6fa8dc;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        }
+        </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar expanded" id="sidebar">
+        <button class="toggle-button" onclick="toggleSidebar()">☰</button>
+        <a href="#" data-tab="home" data-short="H" class="active"><span>Home</span></a>
+        <a href="#" data-tab="music" data-short="M"><span>Music</span></a>
+        <a href="#" data-tab="dashboard" data-short="D"><span>Dashboard</span></a>
+        <a href="#" data-tab="settings" data-short="S"><span>Settings</span></a>
+        <a href="#" data-tab="map" data-short="M"><span>Map</span></a>
+    </div>
+    
+    <div class="top-icons">
+        <div id="temp">Temp: 25°C</div>
+        <div id="date-time">12:00 PM, 01/01/2024</div>
+    </div>
+
+    <!-- Content Sections -->
+    <div class="container">
+        <div id="home" class="tab-content active">
+            <br>
+            <center> <!-- Yes I know center tags are "deprecated" but its fast and simple for now -->
+                <h1>Welcome to the OBD-II Dashboard</h1>
+                <p>Select a tab from the menu to explore features.</p>
+            </center>
+            <hr>
+            <br>
+            <canvas id="home-canvas" width="1268" height="400"></canvas>
+        </div>
+        <div id="music" class="tab-content">
+            <h1>Music Player</h1>
+            <div id="file-explorer">
+                <ul id="folder-list"></ul>
+            </div>
+            <br>
+            <hr>
+            <br>
+            <div id="player">
+                <h3 id="song-title">No song selected</h3>
+                <p id="song-details">Artist: N/A | Album: N/A | Length: 0:00</p>
+                <audio id="audio-player" controls>
+                    <source id="audio-source" src="" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
+        <div id="dashboard" class="tab-content">
+            <br>
+            <canvas id="dashboard-canvas" width="1268" height="400"></canvas>
+        </div>
+        <div id="settings" class="tab-content">
+            <h1>Settings</h1>
+            <!-- Theme Customization -->
+            <div>
+                <label for="theme">Theme Customization:</label>
+                <select id="theme">
+                    <option value="dark">Dark</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            <hr>
+            <div id="custom-theme" style="display: none;">
+                <hr>
+                <div>
+                    <label for="primary-color">Primary Background Color:</label>
+                    <input type="color" id="primary-color" value="#2a2a2a">
+                </div>
+        
+                <div>
+                    <label for="text-color">Text Color:</label>
+                    <input type="color" id="text-color" value="#ffffff">
+                </div>
+        
+                <div>
+                    <label for="sidebar-bg">Sidebar Background Color:</label>
+                    <input type="color" id="sidebar-bg" value="#2b2b2b">
+                </div>
+        
+                <div>
+                    <label for="sidebar-text">Sidebar Text Color:</label>
+                    <input type="color" id="sidebar-text" value="#e0e0e0">
+                </div>
+        
+                <hr>
+                <div>
+                    <label for="button-bg">Button Background:</label>
+                    <input type="color" id="button-bg" value="#444">
+                </div>
+        
+                <div>
+                    <label for="button-radius">Button Border Radius:</label>
+                    <input type="range" id="button-radius" min="0" max="20" value="5">
+                </div>
+        
+                <div>
+                    <label for="button-shadow">Button Shadow:</label>
+                    <input type="checkbox" id="button-shadow" checked>
+                </div>
+        
+                <hr>
+                <div>
+                    <label for="card-bg">Card Background:</label>
+                    <input type="color" id="card-bg" value="#1c1c1c">
+                </div>
+        
+                <div>
+                    <label for="card-radius">Card Border Radius:</label>
+                    <input type="range" id="card-radius" min="0" max="20" value="10">
+                </div>
+        
+                <div>
+                    <label for="card-shadow">Card Shadow:</label>
+                    <input type="checkbox" id="card-shadow" checked>
+                </div>
+        
+                <hr>
+                <div>
+                    <label for="header-font-size">Header Font Size:</label>
+                    <input type="range" id="header-font-size" min="16" max="48" value="24">
+                </div>
+        
+                <div>
+                    <label for="header-font-family">Header Font Family:</label>
+                    <select id="header-font-family">
+                        <option value="Arial">Arial</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Courier New">Courier New</option>
+                    </select>
+                </div>
+        
+                <div>
+                    <label for="content-alignment">Content Alignment:</label>
+                    <select id="content-alignment">
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                    </select>
+                </div>
+        
+                <hr>
+                <div>
+                    <label for="toggle-animations">Enable Animations:</label>
+                    <input type="checkbox" id="toggle-animations" checked>
+                </div>
+            </div>
+        
+            <hr>
+        
+            <!-- Date and Time Format -->
+            <div>
+                <label for="date-format">Date Format:</label>
+                <select id="date-format">
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="YYYY/MM/DD">YYYY/MM/DD</option>
+                </select>
+            </div>
+            <div>
+                <label for="time-format">Time Format:</label>
+                <select id="time-format">
+                    <option value="HH:mm:ss">HH:mm:ss</option>
+                    <option value="hh:mm:ss A">hh:mm:ss A</option>
+                    <option value="HH:mm">HH:mm</option>
+                </select>
+            </div>
+        
+            <hr>
+        
+            <!-- Font Size -->
+            <div>
+                <label for="font-size">Font Size:</label>
+                <input type="range" id="font-size" min="12" max="24" value="16">
+                <span id="font-size-display">16px</span>
+            </div>
+        </div>
+               
+        <div id="map" class="tab-content">
+            <h1>Map</h1>
+            <p>Map content goes here.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const themeSelect = document.getElementById("theme");
+            const customThemeDiv = document.getElementById("custom-theme");
+            const primaryColorInput = document.getElementById("primary-color");
+            const textColorInput = document.getElementById("text-color");
+            const dateFormatSelect = document.getElementById("date-format");
+            const timeFormatSelect = document.getElementById("time-format");
+            const fontSizeInput = document.getElementById("font-size");
+            const fontSizeDisplay = document.getElementById("font-size-display");
+            // Sidebar and Button customization
+            const sidebarBg = document.getElementById("sidebar-bg");
+            const sidebarText = document.getElementById("sidebar-text");
+            const buttonBg = document.getElementById("button-bg");
+            const buttonRadius = document.getElementById("button-radius");
+            const buttonShadow = document.getElementById("button-shadow");
+
+            // Card customization
+            const cardBg = document.getElementById("card-bg");
+            const cardRadius = document.getElementById("card-radius");
+            const cardShadow = document.getElementById("card-shadow");
+
+            // Header customization
+            const headerFontSize = document.getElementById("header-font-size");
+            const headerFontFamily = document.getElementById("header-font-family");
+
+            // Content alignment
+            const contentAlignment = document.getElementById("content-alignment");
+
+            // Animation toggle
+            const toggleAnimations = document.getElementById("toggle-animations");
+
+            // Apply customizations
+            sidebarBg.addEventListener("input", () => {
+                document.querySelector(".sidebar").style.backgroundColor = sidebarBg.value;
+            });
+
+            sidebarText.addEventListener("input", () => {
+                document.querySelectorAll(".sidebar a").forEach(link => {
+                    link.style.color = sidebarText.value;
+                });
+            });
+
+            buttonBg.addEventListener("input", () => {
+                document.querySelectorAll("button").forEach(btn => {
+                    btn.style.backgroundColor = buttonBg.value;
+                });
+            });
+
+            buttonRadius.addEventListener("input", () => {
+                document.querySelectorAll("button").forEach(btn => {
+                    btn.style.borderRadius = `${buttonRadius.value}px`;
+                });
+            });
+
+            buttonShadow.addEventListener("change", () => {
+                document.querySelectorAll("button").forEach(btn => {
+                    btn.style.boxShadow = buttonShadow.checked ? "0px 4px 10px rgba(0, 0, 0, 0.5)" : "none";
+                });
+            });
+
+            cardBg.addEventListener("input", () => {
+                document.querySelectorAll(".container").forEach(card => {
+                    card.style.backgroundColor = cardBg.value;
+                });
+            });
+
+            cardRadius.addEventListener("input", () => {
+                document.querySelectorAll(".container").forEach(card => {
+                    card.style.borderRadius = `${cardRadius.value}px`;
+                });
+            });
+
+            cardShadow.addEventListener("change", () => {
+                document.querySelectorAll(".container").forEach(card => {
+                    card.style.boxShadow = cardShadow.checked ? "0px 4px 10px rgba(0, 0, 0, 0.5)" : "none";
+                });
+            });
+
+            headerFontSize.addEventListener("input", () => {
+                document.querySelectorAll("h1").forEach(header => {
+                    header.style.fontSize = `${headerFontSize.value}px`;
+                });
+            });
+
+            headerFontFamily.addEventListener("change", () => {
+                document.querySelectorAll("h1").forEach(header => {
+                    header.style.fontFamily = headerFontFamily.value;
+                });
+            });
+
+            contentAlignment.addEventListener("change", () => {
+                document.querySelectorAll(".container").forEach(container => {
+                    container.style.textAlign = contentAlignment.value;
+                });
+            });
+
+            toggleAnimations.addEventListener("change", () => {
+                const transition = toggleAnimations.checked ? "opacity 0.5s ease-in-out" : "none";
+                document.querySelectorAll(".tab-content, .sidebar").forEach(element => {
+                    element.style.transition = transition;
+                });
+            });
+
+            let dateFormat = dateFormatSelect.value;
+            let timeFormat = timeFormatSelect.value;
+
+            themeSelect.addEventListener("change", () => {
+                if (themeSelect.value === "custom") {
+                    customThemeDiv.style.display = "block";
+                } else {
+                    customThemeDiv.style.display = "none";
+                }
+            });
+
+            primaryColorInput.addEventListener("input", () => {
+                document.body.style.backgroundColor = primaryColorInput.value;
+            });
+            textColorInput.addEventListener("input", () => {
+                document.body.style.color = textColorInput.value;
+            });
+
+            fontSizeInput.addEventListener("input", () => {
+                fontSizeDisplay.textContent = `${fontSizeInput.value}px`;
+                document.body.style.fontSize = `${fontSizeInput.value}px`;
+            });
+
+            let currentDateTime = "";
+
+            function updateDateTime() {
+                const now = new Date();
+                const formattedTime = formatTime(now, timeFormat);
+                const formattedDate = formatDate(now, dateFormat);
+                const newDateTime = `${formattedTime}, ${formattedDate}`;
+
+                if (newDateTime !== currentDateTime) {
+                    currentDateTime = newDateTime;
+                    document.getElementById("date-time").innerText = currentDateTime;
+                }
+            }
+
+            function formatDate(date, format) {
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = date.getFullYear();
+
+                return format
+                    .replace("DD", day)
+                    .replace("MM", month)
+                    .replace("YYYY", year);
+            }
+
+            function formatTime(date, format) {
+                const hours24 = date.getHours();
+                const hours12 = hours24 % 12 || 12;
+                const minutes = String(date.getMinutes()).padStart(2, "0");
+                const seconds = String(date.getSeconds()).padStart(2, "0");
+                const ampm = format.includes("A") ? (hours24 >= 12 ? "PM" : "AM") : "";
+
+                return format
+                    .replace("HH", String(hours24).padStart(2, "0"))
+                    .replace("hh", String(hours12).padStart(2, "0"))
+                    .replace("mm", minutes)
+                    .replace("ss", seconds)
+                    .replace("A", ampm);
+            }
+
+            dateFormatSelect.addEventListener("change", () => {
+                dateFormat = dateFormatSelect.value;
+            });
+            timeFormatSelect.addEventListener("change", () => {
+                timeFormat = timeFormatSelect.value;
+            });
+
+            setInterval(updateDateTime, 1000);
+        });
+    </script>
+
+    <script>
+        async function loadMusicList() {
+            const response = await fetch('/music');
+            const musicStructure = await response.json();
+
+            const folderListElement = document.getElementById('folder-list');
+            folderListElement.innerHTML = '';
+
+            for (const [folder, songs] of Object.entries(musicStructure)) {
+                const folderItem = document.createElement('li');
+                folderItem.className = 'folder-item';
+
+                const folderName = document.createElement('div');
+                folderName.className = 'folder-name';
+
+                if (folder === ".") {
+                    folderName.textContent = "Root";
+                } else {
+                    folderName.innerHTML = `${folder} <span class="arrow">▶</span>`;
+                    folderName.addEventListener('click', () => {
+                        const songList = folderItem.querySelector('.song-list');
+                        const isOpen = songList.classList.toggle('open');
+                        folderName.classList.toggle('open', isOpen); 
+
+                        if (isOpen) {
+                            songList.style.maxHeight = songList.scrollHeight + "px";
+                        } else {
+                            songList.style.maxHeight = "0";
+                        }
+                    });
+                }
+
+                const songList = document.createElement('ul');
+                songList.className = 'song-list';
+                if (folder === ".") {
+                    songList.classList.add('open');
+                }
+
+                songs.forEach(song => {
+                    const songItem = document.createElement('li');
+                    songItem.textContent = `${song.title} - ${song.artist}`;
+                    songItem.className = 'song-item';
+                    songItem.addEventListener('click', () => playSong(song));
+                    songList.appendChild(songItem);
+                });
+
+                folderItem.appendChild(folderName);
+                folderItem.appendChild(songList);
+                folderListElement.appendChild(folderItem);
+            }
+        }
+
+    
+        function playSong(song) {
+            if (!song.file) {
+                console.error("Song file path is missing or undefined:", song);
+                return;
+            }
+
+            const audioPlayer = document.getElementById('audio-player');
+            const audioSource = document.getElementById('audio-source');
+            const songTitle = document.getElementById('song-title');
+            const songDetails = document.getElementById('song-details');
+
+            audioSource.src = `/play/${song.file}`;
+            audioPlayer.load();
+
+            audioPlayer.play().catch(error => {
+                console.warn("Audio playback failed:", error.message);
+            });
+
+            songTitle.textContent = song.title;
+            songDetails.textContent = `Artist: ${song.artist} | Album: ${song.album} | Length: ${Math.floor(song.length / 60)}:${String(song.length % 60).padStart(2, '0')}`;
+        }
+
+
+
+        document.addEventListener('DOMContentLoaded', loadMusicList);
+    </script>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('shrink');
+        }
+
+        const links = document.querySelectorAll('.sidebar a');
+        const contents = document.querySelectorAll('.tab-content');
+        let isTransitioning = false;
+
+        links.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+
+                if (isTransitioning) return;
+
+                const targetLink = e.target.closest('a');
+
+                if (targetLink.classList.contains('active')) return;
+
+                links.forEach(link => link.classList.remove('active'));
+                targetLink.classList.add('active');
+
+                const targetTab = targetLink.dataset.tab;
+                if (!targetTab) return;
+
+                isTransitioning = true;
+
+                const activeContent = document.querySelector('.tab-content.active');
+                if (activeContent) {
+                    activeContent.style.opacity = 0;
+
+                    setTimeout(() => {
+                        activeContent.classList.remove('active');
+                        activeContent.style.display = 'none';
+
+                        const newContent = document.getElementById(targetTab);
+                        if (newContent) {
+                            newContent.style.display = 'block';
+                            setTimeout(() => {
+                                newContent.classList.add('active');
+                                newContent.style.opacity = 1;
+
+                                setTimeout(() => {
+                                    isTransitioning = false;
+                                }, 500);
+                            }, 10);
+                        }
+                    }, 500);
+                }
+            });
+        });
+
+        // Update date and time dynamically
+        function updateDateTime() {
+            const now = new Date();
+            const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const date = now.toLocaleDateString();
+            document.getElementById('date-time').innerText = `${time}, ${date}`;
+        }
+
+        setInterval(updateDateTime, 1000);
+
+        // Dashboard Logic
+        const canvasIds = ['home-canvas', 'dashboard-canvas']; 
+        const maxValues = { Speed: 240, RPM: 8000, Coolant: 120 };
+        let currentValues = { Speed: 0, RPM: 0, Coolant: 0 };
+        let targetValues = { Speed: 0, RPM: 0, Coolant: 0 };
+
+        const positions = [
+            { centerX: 200, centerY: 200, label: 'Speed', unit: 'km/h' },
+            { centerX: 634, centerY: 200, label: 'RPM', unit: '' },
+            { centerX: 1068, centerY: 200, label: 'Coolant', unit: '°C' }
+        ];
+
+        const startAngle = 0.75 * Math.PI;
+        const endAngle = 2.25 * Math.PI;
+        const arcRange = endAngle - startAngle;
+
+        function mapValueToAngle(value, maxVal) {
+            return startAngle + ((value / maxVal) * arcRange);
+        }
+
+        function drawNeedle(ctx, centerX, centerY, rotation, color) {
+            ctx.lineWidth = 4;
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(rotation + 1.5);
+            ctx.beginPath();
+            ctx.moveTo(0, 10);
+            ctx.lineTo(0, -90);
+            ctx.strokeStyle = color;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawDial(ctx, centerX, centerY, label, unit, currentValue) {
+            ctx.clearRect(centerX - 150, centerY - 150, 300, 300);
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 140, startAngle, endAngle);
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = '#444';
+            ctx.stroke();
+
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            for (let i = 0; i <= 10; i++) {
+                const angle = startAngle + (i / 10) * arcRange;
+                const value = Math.round((i * maxValues[label] / 10));
+                const x = centerX + 120 * Math.cos(angle) - ctx.measureText(value).width / 2;
+                const y = centerY + 120 * Math.sin(angle) + 5;
+                ctx.fillText(value, x, y);
+
+                if (i < 10) {
+                    for (let j = 1; j < 5; j++) {
+                        const minorAngle = angle + (j / 50) * arcRange;
+                        const dotX = centerX + 130 * Math.cos(minorAngle);
+                        const dotY = centerY + 130 * Math.sin(minorAngle);
+                        ctx.beginPath();
+                        ctx.arc(dotX, dotY, 2, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#888';
+                        ctx.fill();
+                    }
+                }
+            }
+
+            ctx.font = '16px Arial';
+            ctx.fillText(label, centerX - ctx.measureText(label).width / 2, centerY + 80);
+            ctx.font = '20px Arial';
+            ctx.fillText(currentValue + ' ' + unit, centerX - ctx.measureText(currentValue + ' ' + unit).width / 2, centerY + 100);
+        }
+
+
+        function updateGauge(ctx, centerX, centerY, label, unit) {
+            const currentValue = currentValues[label];
+            const targetValue = targetValues[label];
+            const maxVal = maxValues[label];
+
+            const currentRotation = mapValueToAngle(currentValue, maxVal);
+
+            const diff = targetValue - currentValue;
+            const step = diff / 100;
+
+            if (Math.abs(diff) > 0.5) {
+                currentValues[label] += step;
+            } else {
+                currentValues[label] = targetValue;
+            }
+
+            drawDial(ctx, centerX, centerY, label, unit, Math.round(currentValues[label]));
+            drawNeedle(ctx, centerX, centerY, currentRotation, 'red');
+        }
+
+        function updateGauges() {
+            canvasIds.forEach(canvasId => {
+                const canvas = document.getElementById(canvasId);
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    positions.forEach(pos => {
+                        updateGauge(ctx, pos.centerX, pos.centerY, pos.label, pos.unit);
+                    });
+                }
+            });
+        }
+
+        function fetchData() {
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    Object.keys(targetValues).forEach(key => {
+                        targetValues[key] = data[key];
+                    });
+                });
+        }
+
+        function animate() {
+            updateGauges();
+            requestAnimationFrame(animate);
+        }
+
+        setInterval(fetchData, 1000);
+        animate();
+    </script>
+</body>
+</html>
