@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OBD-II Dashboard</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.3.1/dist/ol.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.3.1/ol.css">
+
+    
     <style>
         body {
         margin: 0;
@@ -357,6 +362,81 @@
         border-radius: 50%;
         cursor: pointer;
         }
+
+
+
+
+
+/* keeping format like this, uploading to github as a checkpoint */
+#map-container-wrapper {
+    display: flex;
+    height: 500px;
+    width: 100%;
+    margin: 20px auto;
+    background-color: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+    gap: 10px; 
+}
+
+#map-container {
+    flex: 3;
+    height: 100%;
+    border-radius: 8px;
+    border: 2px solid #333;
+}
+
+#directions-panel {
+    flex: 1;
+    background-color: #2b2b2b;
+    color: #ffffff;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    overflow-y: auto;
+}
+
+#directions-panel h2 {
+    font-size: 18px;
+    color: #6fa8dc;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #444;
+}
+
+#directions-panel #next-direction {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #3a3a3a;
+    border-radius: 5px;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+#directions-panel ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#directions-panel ul li {
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #3a3a3a;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    color: #e0e0e0;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+#directions-panel ul li:hover {
+    background-color: #6fa8dc;
+    color: #1e1e1e;
+    transform: translateY(-3px);
+}
+
+
         </style>
 </head>
 <body>
@@ -442,10 +522,6 @@
                 </div>
         
                 <hr>
-                <div>
-                    <label for="button-bg">Button Background:</label>
-                    <input type="color" id="button-bg" value="#444">
-                </div>
         
                 <div>
                     <label for="button-radius">Button Border Radius:</label>
@@ -533,12 +609,175 @@
                 <span id="font-size-display">16px</span>
             </div>
         </div>
+
+
+
+
+
+
                
         <div id="map" class="tab-content">
-            <h1>Map</h1>
-            <p>Map content goes here.</p>
+            <h1>GPS Map</h1>
+            <div id="map-container-wrapper">
+                <div id="map-container"></div>
+                <div id="directions-panel">
+                    <h2>Next Direction</h2>
+                    <div id="next-direction">Loading...</div>
+                    <h2>Upcoming Directions</h2>
+                    <ul id="upcoming-directions"></ul>
+                </div>
+            </div>
+            <input type="file" id="gpx-upload" accept=".gpx" />
         </div>
+        
+        
+        
     </div>
+
+
+
+    <script>
+document.addEventListener("DOMContentLoaded", () => {
+    const map = new ol.Map({
+        target: 'map-container',
+        layers: [
+            new ol.layer.Tile({
+                source: new ol.source.OSM(),
+            }),
+            new ol.layer.Vector({
+                source: new ol.source.Vector(),
+                style: new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: 'blue',
+                        width: 3,
+                    }),
+                }),
+            }),
+        ],
+        view: new ol.View({
+            center: ol.proj.fromLonLat([174.7633, -36.8485]),
+            zoom: 12,
+        }),
+    });
+
+    const vectorSource = map.getLayers().getArray()[1].getSource();
+
+    document.getElementById("gpx-upload").addEventListener("change", function (event) {
+        const file = event.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            fetch('/upload-gpx', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Track Points Received:", data.track_points);
+
+                    const coordinates = data.track_points.map(point => 
+                        ol.proj.fromLonLat([point.longitude, point.latitude])
+                    );
+
+                    const lineStringFeature = new ol.Feature({
+                        geometry: new ol.geom.LineString(coordinates),
+                    });
+
+                    vectorSource.clear();
+                    vectorSource.addFeature(lineStringFeature);
+
+                    const extent = vectorSource.getExtent();
+                    map.getView().fit(extent, { padding: [50, 50, 50, 50] });
+                })
+                .catch(error => console.error('Error uploading GPX:', error));
+        }
+    });
+});
+
+
+    </script>
+    
+
+
+
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const directionsPanel = document.getElementById("directions-panel");
+    const nextDirectionElement = document.getElementById("next-direction");
+    const upcomingDirectionsElement = document.getElementById("upcoming-directions");
+
+    document.getElementById("gpx-upload").addEventListener("change", function (event) {
+        const file = event.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            fetch('/upload-directions', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Route Points Received:", data.route_points);
+
+                    const routePoints = data.route_points;
+                    if (routePoints.length > 0) {
+                        updateDirections(routePoints);
+                    } else {
+                        console.error("No route points received.");
+                    }
+                })
+                .catch(error => console.error('Error uploading GPX for directions:', error));
+        }
+    });
+
+    function updateDirections(routePoints) {
+        let currentIndex = 0;
+
+        function updateUI() {
+            if (currentIndex < routePoints.length) {
+                nextDirectionElement.textContent = routePoints[currentIndex].instruction;
+
+                upcomingDirectionsElement.innerHTML = routePoints
+                    .slice(currentIndex + 1)
+                    .map(point => `<li>${point.instruction}</li>`)
+                    .join('');
+
+                currentIndex++;
+            }
+        }
+
+        updateUI();
+        const interval = setInterval(() => {
+            if (currentIndex < routePoints.length) {
+                updateUI();
+            } else {
+                clearInterval(interval);
+            }
+        }, 5000);
+    }
+});
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+        
+        
 
     <script>
         document.addEventListener("DOMContentLoaded", () => {
@@ -861,6 +1100,30 @@
 
         setInterval(updateDateTime, 1000);
 
+        </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script>
+
         // Dashboard Logic
         const canvasIds = ['home-canvas', 'dashboard-canvas']; 
         const maxValues = { Speed: 240, RPM: 8000, Coolant: 120 };
@@ -897,6 +1160,7 @@
         function drawDial(ctx, centerX, centerY, label, unit, currentValue) {
             ctx.clearRect(centerX - 150, centerY - 150, 300, 300);
 
+            // Draw the outer arc
             ctx.beginPath();
             ctx.arc(centerX, centerY, 140, startAngle, endAngle);
             ctx.lineWidth = 10;
@@ -905,16 +1169,33 @@
 
             ctx.fillStyle = 'white';
             ctx.font = '14px Arial';
-            for (let i = 0; i <= 10; i++) {
-                const angle = startAngle + (i / 10) * arcRange;
-                const value = Math.round((i * maxValues[label] / 10));
-                const x = centerX + 120 * Math.cos(angle) - ctx.measureText(value).width / 2;
-                const y = centerY + 120 * Math.sin(angle) + 5;
-                ctx.fillText(value, x, y);
 
-                if (i < 10) {
+            let increment, numSteps;
+            const maxVal = maxValues[label];
+
+            // Determine the increment based on the gauge type
+            if (label === "RPM") {
+                increment = 1000; // RPM increments by 1000
+            } else {
+                increment = 20; // Default increment for other gauges
+            }
+            numSteps = maxVal / increment;
+
+            for (let i = 0; i <= numSteps; i++) {
+                const angle = startAngle + (i / numSteps) * arcRange;
+                const value = i * increment;
+
+                // Display RPM in thousands (e.g., 1k, 2k, 3k)
+                const displayValue = label === "RPM" ? `${value / 1000}k` : value;
+
+                const x = centerX + 120 * Math.cos(angle) - ctx.measureText(displayValue).width / 2;
+                const y = centerY + 120 * Math.sin(angle) + 5;
+                ctx.fillText(displayValue, x, y);
+
+                // Draw minor tick marks
+                if (i < numSteps) {
                     for (let j = 1; j < 5; j++) {
-                        const minorAngle = angle + (j / 50) * arcRange;
+                        const minorAngle = angle + (j / (5 * numSteps)) * arcRange;
                         const dotX = centerX + 130 * Math.cos(minorAngle);
                         const dotY = centerY + 130 * Math.sin(minorAngle);
                         ctx.beginPath();
@@ -925,11 +1206,17 @@
                 }
             }
 
+            // Display the label and current value
             ctx.font = '16px Arial';
             ctx.fillText(label, centerX - ctx.measureText(label).width / 2, centerY + 80);
             ctx.font = '20px Arial';
-            ctx.fillText(currentValue + ' ' + unit, centerX - ctx.measureText(currentValue + ' ' + unit).width / 2, centerY + 100);
+
+            // Show current RPM value as is, no "k" suffix
+            const displayCurrentValue = label === "RPM" ? `${currentValue}` : `${currentValue} ${unit}`;
+            ctx.fillText(displayCurrentValue, centerX - ctx.measureText(displayCurrentValue).width / 2, centerY + 100);
         }
+
+
 
 
         function updateGauge(ctx, centerX, centerY, label, unit) {
@@ -982,5 +1269,13 @@
         setInterval(fetchData, 1000);
         animate();
     </script>
+
+
+
+
+
+
+
+
 </body>
 </html>

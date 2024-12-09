@@ -1,14 +1,18 @@
-from flask import Flask, render_template, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, send_from_directory, request, abort
 import os
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 import threading
 import random
 import time
+import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
 
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "music")
+gpx_track = []
+
 
 def get_mp3_metadata(file_path):
     """Extract metadata from an MP3 file."""
@@ -85,6 +89,169 @@ def play_music(filename):
     return send_from_directory(MUSIC_DIR, filename)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+gps_data = {
+    "latitude": -36.8485,  
+    "longitude": 174.7633,
+    "speed": 0, 
+    "nextDirection": "straight"
+}
+def simulate_gps_data():
+    directions = ["left", "right", "straight", "uturn"]
+    while True:
+        gps_data["latitude"] += random.uniform(-0.0001, 0.0001)
+        gps_data["longitude"] += random.uniform(-0.0001, 0.0001)
+        gps_data["speed"] = random.randint(0, 100)
+        gps_data["nextDirection"] = random.choice(directions)  
+        time.sleep(1)
+
+
+@app.route('/gps-data')
+def get_gps_data():
+    """Return current simulated GPS data."""
+    return jsonify(gps_data)
+
+
+@app.route('/gpx-track')
+def get_gpx_track():
+    """Return the parsed GPX track points."""
+    return jsonify(gpx_track)
+
+
+@app.route('/upload-gpx', methods=['POST'])
+def upload_gpx():
+    print("Received a request to upload GPX.")
+    if 'file' not in request.files:
+        abort(400, description="No file part in the request.")
+
+    file = request.files['file']
+    if file.filename == '':
+        abort(400, description="No file selected for uploading.")
+
+    if not file.filename.endswith('.gpx'):
+        abort(400, description="Invalid file type. Only .gpx files are allowed.")
+
+    filepath = os.path.join(UPLOAD_DIR, file.filename)
+    file.save(filepath)
+    print(f"Saved file to {filepath}")
+
+    try:
+        gpx_track = parse_gpx_custom(filepath)
+        #print("Parsed GPX data:", gpx_track)
+    except Exception as e:
+        #print("Failed to parse GPX:", e)
+        abort(500, description="Failed to parse GPX file.")
+
+    return jsonify({"track_points": gpx_track})
+
+def parse_gpx_custom(filepath):
+    try:
+        with open(filepath, 'r', encoding='utf-8') as file:
+            print("Opening file:", filepath)
+            track_points = []
+            for line in file:
+                line = line.strip()
+                if '<trkpt' in line:
+                    lat = line.split('lat="')[1].split('"')[0]
+                    lon = line.split('lon="')[1].split('"')[0]
+                    track_points.append({'latitude': float(lat), 'longitude': float(lon)})
+        return track_points
+    except Exception as e:
+        print("Error parsing file:", e)
+        raise
+
+
+
+
+
+
+
+@app.route('/upload-directions', methods=['POST'])
+def upload_directions():
+    print("Received a request to upload GPX for directions.")
+    if 'file' not in request.files:
+        abort(400, description="No file part in the request.")
+
+    file = request.files['file']
+    if file.filename == '':
+        abort(400, description="No file selected for uploading.")
+
+    if not file.filename.endswith('.gpx'):
+        abort(400, description="Invalid file type. Only .gpx files are allowed.")
+
+    filepath = os.path.join(UPLOAD_DIR, file.filename)
+    file.save(filepath)
+    print(f"Saved file to {filepath}")
+
+    try:
+        directions = parse_rtept(filepath)
+        print("Parsed Directions:", directions)
+    except Exception as e:
+        print("Failed to parse GPX for directions:", e)
+        abort(500, description="Failed to parse GPX file.")
+
+    return jsonify({"route_points": directions})
+
+
+def parse_rtept(filepath):
+    try:
+        with open(filepath, 'r', encoding='utf-8') as file:
+            print("Opening file:", filepath)
+            route_points = []
+            current_point = None
+            buffer = ""
+
+            for line in file:
+                line = line.strip()
+                buffer += line
+
+                if '</rtept>' in line:
+                    if '<rtept' in buffer:
+                        try:
+                            lat = buffer.split('lat="')[1].split('"')[0]
+                            lon = buffer.split('lon="')[1].split('"')[0]
+                            desc = buffer.split('<desc>')[1].split('</desc>')[0]
+                            route_points.append({
+                                'latitude': float(lat),
+                                'longitude': float(lon),
+                                'instruction': desc
+                            })
+                            print(f"Captured route point: {route_points[-1]}") 
+                        except (IndexError, ValueError) as e:
+                            print(f"Error parsing buffer: {buffer} - {e}")
+                    buffer = ""  
+
+            print("Captured route points:", len(route_points))
+            return route_points
+
+    except Exception as e:
+        print("Error parsing file:", e)
+        raise
+
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     threading.Thread(target=simulate_data, daemon=True).start()
+    threading.Thread(target=simulate_gps_data, daemon=True).start()
     app.run(debug=True)
