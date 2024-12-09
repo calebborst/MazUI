@@ -1,20 +1,20 @@
 # MazPi
 
-MazPi is a custom web-based car display system designed for a Mazda 6 (2003) using a Raspberry Pi 4. Inspired by OpenAuto Pro, this project aims to provide a stylish and functional user interface for in-car information and entertainment.
+MazPi is a custom web-based car display system designed for my Mazda 6 (2003) using a Raspberry Pi 4. Inspired by OpenAuto Pro, this project aims to provide a stylish and functional user interface for in-car information and entertainment.
 
 ## Features
 
 - **Web-Based Interface**: Powered by Flask, accessible via a localhost web server.
-- **Bluetooth Integration**: Connects seamlessly to a transmitter for audio and data.
+- **Bluetooth Integration**: Connects seamlessly to a transmitter for audio and data. (wip)
 - **Customizable UI**: Designed with a focus on clean and modern web design elements.
-- **Auto-Opening Mechanism**: Includes motorized functionality for the display panel.
+- **Auto-Opening Mechanism**: Includes motorized functionality for the display panel. (wip)
 - **Real-Time Vehicle Data**: Fetches and displays OBD-II metrics using the `obd` library.
 - **Media Support**: Handles music and other media playback with the `mutagen` library.
 
 ## Installation
 
 1. **Clone the Repository**
-   `git clone https://github.com/your-username/mazpi.git`
+   `git clone https://github.com/calebborst/mazpi.git`
    `cd mazpi`
 
 2. **Install Dependencies**
